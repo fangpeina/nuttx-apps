@@ -40,7 +40,7 @@
 #  define OK    (0)
 #else
 #  include <nuttx/config.h>          /* NuttX configuration */
-#  include <debug.h>                 /* For nerr, info */
+#  include <nuttx/debug.h>                 /* For nerr, info */
 #  include <nuttx/compiler.h>        /* For CONFIG_CPP_HAVE_WARNING */
 #  include "netutils/dhcpd.h"        /* Advertised DHCPD APIs */
 #endif
@@ -661,7 +661,7 @@ static inline bool dhcpd_parseoptions(void)
             if (optlen >= 6 && optlen < remaining)
               {
                 memcpy(&tmp, &ptr[DHCPD_OPTION_DATA], 4);
-                g_state.ds_optleasetime = (time_t)ntohl(tmp);
+                g_state.ds_optleasetime = ntohl(tmp);
               }
             break;
 

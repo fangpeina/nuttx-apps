@@ -257,17 +257,38 @@ int cmd_cd(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
   else if (strcmp(path, "-") == 0)
     {
       alloc = strdup(nsh_getwd(g_oldpwd));
+      if (alloc == NULL)
+        {
+          nsh_error(vtbl, g_fmtcmdoutofmemory, argv[0]);
+          ret = ERROR;
+          goto errout;
+        }
+
       path  = alloc;
     }
 #endif
   else if (strcmp(path, "..") == 0)
     {
       alloc = strdup(nsh_getcwd(vtbl));
+      if (alloc == NULL)
+        {
+          nsh_error(vtbl, g_fmtcmdoutofmemory, argv[0]);
+          ret = ERROR;
+          goto errout;
+        }
+
       path  = dirname(alloc);
     }
   else
     {
       fullpath = nsh_getfullpath(vtbl, path);
+      if (fullpath == NULL)
+        {
+          nsh_error(vtbl, g_fmtcmdoutofmemory, argv[0]);
+          ret = ERROR;
+          goto errout;
+        }
+
       path     = fullpath;
     }
 
@@ -288,6 +309,7 @@ int cmd_cd(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
 
   /* Free any memory that was allocated */
 
+errout:
   if (alloc)
     {
       free(alloc);
@@ -368,19 +390,18 @@ do_echo:
           str_escape(argv[0]);
         }
 
-      nsh_output(vtbl, "%s", argv[0]);
+      if (argc > 1)
+        {
+          nsh_output(vtbl, "%s ", argv[0]);
+        }
+      else
+        {
+          nsh_output(vtbl, newline ? "%s\n" : "%s", argv[0]);
+          break;
+        }
 
       --argc;
       ++argv;
-      if (argc > 0)
-        {
-          nsh_output(vtbl, " ");
-        }
-    }
-
-  if (newline)
-    {
-      nsh_output(vtbl, "\n");
     }
 
   return OK;

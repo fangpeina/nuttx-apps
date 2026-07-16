@@ -32,7 +32,7 @@
 #include <sys/stat.h>
 
 #ifdef __NuttX__
-#include <debug.h>
+#include <nuttx/debug.h>
 #endif
 #include <inttypes.h>
 #include <stdint.h>
@@ -356,7 +356,7 @@ int main(int argc, FAR char **argv)
         }
       else if (strncmp(argv[i], "verify", 6) == 0)
         {
-          dd.oflags |= O_RDONLY;
+          dd.oflags = (dd.oflags & ~O_ACCMODE) | O_RDWR;
         }
       else if (strncmp(argv[i], "conv=", 5) == 0)
         {
@@ -409,7 +409,8 @@ int main(int argc, FAR char **argv)
 
   /* If verify enabled, infile and outfile are mandatory */
 
-  if ((dd.oflags & O_RDONLY) && (infile == NULL || outfile == NULL))
+  if ((dd.oflags & O_ACCMODE) == O_RDWR &&
+      (infile == NULL || outfile == NULL))
     {
       fprintf(stderr, "%s: invalid parameters: %s\n", g_dd,
           strerror(EINVAL));
@@ -508,8 +509,8 @@ int main(int argc, FAR char **argv)
 #ifdef CONFIG_SYSTEM_DD_STATS
   clock_gettime(CLOCK_MONOTONIC, &ts1);
 
-  elapsed  = (((uint64_t)ts1.tv_sec * NSEC_PER_SEC) + ts1.tv_nsec);
-  elapsed -= (((uint64_t)ts0.tv_sec * NSEC_PER_SEC) + ts0.tv_nsec);
+  elapsed  = (ts1.tv_sec * NSEC_PER_SEC) + ts1.tv_nsec;
+  elapsed -= (ts0.tv_sec * NSEC_PER_SEC) + ts0.tv_nsec;
   elapsed /= NSEC_PER_USEC; /* usec */
 
   fprintf(stderr, "%" PRIu64 " bytes (%" PRIu32 " blocks) copied, %u usec, ",
@@ -519,7 +520,7 @@ int main(int argc, FAR char **argv)
          / ((double)elapsed / USEC_PER_SEC)));
 #endif
 
-  if (ret == 0 && (dd.oflags & O_RDONLY) != 0)
+  if (ret == 0 && (dd.oflags & O_ACCMODE) == O_RDWR)
     {
       ret = dd_verify(&dd);
     }

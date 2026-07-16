@@ -31,7 +31,7 @@ MODULE = $(CONFIG_TESTING_OSTEST)
 
 # NuttX OS Test
 
-CSRCS   = getopt.c libc_memmem.c restart.c sighelper.c
+CSRCS  = getopt.c libc_memmem.c restart.c sighelper.c
 
 ifeq ($(CONFIG_ENABLE_ALL_SIGNALS),y)
 CSRCS += sighand.c signest.c
@@ -73,6 +73,10 @@ endif
 
 ifeq ($(CONFIG_TESTING_OSTEST_AIO),y)
 CSRCS += aio.c
+endif
+
+ifeq ($(CONFIG_TESTING_OSTEST_MULTIUSER),y)
+CSRCS += multiuser.c
 endif
 
 ifeq ($(CONFIG_SCHED_WAITPID),y)
@@ -160,14 +164,16 @@ CSRCS += nxevent.c
 endif
 endif
 
-ifeq ($(CONFIG_HRTIMER),y)
-ifeq ($(CONFIG_BUILD_FLAT),y)
-CSRCS += hrtimer.c
-endif
+ifeq ($(CONFIG_ARCH_HAVE_PERF_EVENTS),y)
+CSRCS += perf_gettime.c
 endif
 
 ifeq ($(CONFIG_BUILD_FLAT),y)
-CSRCS += wdog.c
+CSRCS += wdog.c spinlock.c
+
+ifeq ($(CONFIG_HRTIMER),y)
+CSRCS += hrtimer.c
+endif
 endif
 
 include $(APPDIR)/Application.mk

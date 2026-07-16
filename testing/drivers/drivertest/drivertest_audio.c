@@ -44,7 +44,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <mqueue.h>
-#include <debug.h>
+#include <nuttx/debug.h>
 #include <unistd.h>
 
 #include <nuttx/audio/audio.h>
@@ -382,7 +382,8 @@ static int audio_test_prepare(FAR struct audio_state_s *state,
     }
   else
     {
-      state->out_fd = open(state->outfile, O_WRONLY | O_CREAT | O_TRUNC);
+      state->out_fd = open(state->outfile,
+                           O_WRONLY | O_CREAT | O_TRUNC, 0666);
     }
 
   if (state->out_fd == -1)

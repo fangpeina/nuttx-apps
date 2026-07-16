@@ -871,6 +871,7 @@ static void fastboot_filedump(FAR struct fastboot_ctx_s *ctx,
                               FAR const char *arg)
 {
   struct stat sb;
+  size_t len;
   int ret;
 
   if (!arg)
@@ -879,14 +880,30 @@ static void fastboot_filedump(FAR struct fastboot_ctx_s *ctx,
       return;
     }
 
-  ret = sscanf(arg, "%s %" PRIdOFF " %zu", ctx->upload_param.u.file.path,
-               &ctx->upload_param.u.file.offset, &ctx->upload_param.size);
-  if (ret != 1 && ret != 3)
+  arg += strspn(arg, " \t\r\n");
+  len = strcspn(arg, " \t\r\n");
+  if (len == 0)
     {
       fastboot_fail(ctx, "Failed to parse arguments");
       return;
     }
-  else if (ret == 1)
+
+  if (len >= sizeof(ctx->upload_param.u.file.path))
+    {
+      len = sizeof(ctx->upload_param.u.file.path) - 1;
+    }
+
+  memcpy(ctx->upload_param.u.file.path, arg, len);
+  ctx->upload_param.u.file.path[len] = '\0';
+
+  ret = sscanf(arg + len, "%" PRIdOFF " %zu",
+               &ctx->upload_param.u.file.offset, &ctx->upload_param.size);
+  if (ret != EOF && ret != 0 && ret != 2)
+    {
+      fastboot_fail(ctx, "Failed to parse arguments");
+      return;
+    }
+  else if (ret != 2)
     {
       ret = stat(ctx->upload_param.u.file.path, &sb);
       if (ret < 0)
@@ -1295,8 +1312,9 @@ static int fastboot_tcp_initialize(FAR struct fastboot_ctx_s *ctx)
   netinit_bringup();
 #endif
 
-  ctx->tran_fd[0] = socket(AF_INET, SOCK_STREAM,
-                           SOCK_CLOEXEC | SOCK_NONBLOCK);
+  ctx->tran_fd[0] = socket(AF_INET,
+                           SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK,
+                           0);
   if (ctx->tran_fd[0] < 0)
     {
       fb_err("create socket failed %d", errno);

@@ -381,7 +381,20 @@ static int user_main(int argc, char *argv[])
       check_test_memory_usage();
 #endif
 
-#if !defined(CONFIG_DISABLE_PTHREAD) && defined(__KERNEL__) && \
+#if defined(CONFIG_TESTING_OSTEST_MULTIUSER) && defined(CONFIG_SCHED_USER_IDENTITY)
+      /* Multi-user identity and file permission regression tests */
+
+      printf("\nuser_main: multi-user test\n");
+      if (multiuser_test() != 0)
+        {
+          printf("user_main: ERROR multi-user test failed\n");
+          ASSERT(false);
+        }
+
+      check_test_memory_usage();
+#endif
+
+#if !defined(CONFIG_DISABLE_PTHREAD) && defined(CONFIG_BUILD_FLAT) && \
     defined(CONFIG_SCHED_WORKQUEUE)
       /* Check work queues */
 
@@ -548,9 +561,21 @@ static int user_main(int argc, char *argv[])
 #endif
 
 #ifdef CONFIG_BUILD_FLAT
+      printf("\nuser_main: spinlock test\n");
+      spinlock_test();
+      check_test_memory_usage();
+
       printf("\nuser_main: wdog test\n");
       wdog_test();
       check_test_memory_usage();
+
+      /* Verify hrtimer */
+
+#  ifdef CONFIG_HRTIMER
+      printf("\nuser_main: hrtimer test\n");
+      hrtimer_test();
+      check_test_memory_usage();
+#  endif
 #endif
 
 #if !defined(CONFIG_DISABLE_POSIX_TIMERS) && \
@@ -631,11 +656,11 @@ static int user_main(int argc, char *argv[])
       check_test_memory_usage();
 #endif
 
-#if defined(CONFIG_HRTIMER) && defined(CONFIG_BUILD_FLAT)
-      /* Verify hrtimer */
+#if defined(CONFIG_ARCH_PERF_EVENTS) && !defined(CONFIG_ARCH_PERF_EVENTS_USER_ACCESS)
+      /* Verify performance event time counter */
 
-      printf("\nuser_main: hrtimer test\n");
-      hrtimer_test();
+      printf("\nuser_main: performance event time counter test\n");
+      perf_gettime_test();
       check_test_memory_usage();
 #endif
 

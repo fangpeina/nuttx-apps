@@ -45,7 +45,7 @@
 #include <libgen.h>      /* Needed for basename */
 #include <assert.h>
 #include <errno.h>
-#include <debug.h>
+#include <nuttx/debug.h>
 #include <getopt.h>
 
 #if defined(CONFIG_LIBC_NETDB) && !defined(CONFIG_NSH_DISABLE_NSLOOKUP)
@@ -1310,7 +1310,7 @@ int cmd_arp(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
           FAR uint8_t *ptr;
 
           if (ifname != NULL &&
-              strcmp(ifname, (FAR char *)arptab[i].arp_dev) != 0)
+              strcmp(ifname, arptab[i].arp_dev) != 0)
             {
               continue;
             }
@@ -1555,6 +1555,12 @@ int cmd_wget(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
   if (localfile == NULL)
     {
       allocfile = strdup(url);
+      if (allocfile == NULL)
+        {
+          fmt = g_fmtcmdoutofmemory;
+          goto errout;
+        }
+
       localfile = basename(allocfile);
     }
 

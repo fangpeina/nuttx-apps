@@ -31,7 +31,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#include <debug.h>
+#include <nuttx/debug.h>
 
 #include <arpa/inet.h>
 #include <nuttx/net/ip.h>
@@ -48,7 +48,8 @@
  * Name: netlib_check_ifconnectivity
  *
  * Description:
- *   Check network interface connectivity by pinging the gateway
+ *   Check network connectivity by pinging the default gateway
+ *   of the specified network interface.
  *
  * Parameters:
  *   ifname   The name of the interface to use
@@ -56,7 +57,7 @@
  *   retry    The retry times of ping
  *
  * Return:
- *   nums of gateway reply of ping; a nagtive on failure.
+ *   nums of gateway reply of ping; a negative on failure.
  *
  ****************************************************************************/
 

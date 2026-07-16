@@ -37,13 +37,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 #include <string.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <limits.h>
 #include <libgen.h>
 #include <errno.h>
-#include <debug.h>
+#include <nuttx/debug.h>
+
+#ifdef CONFIG_LIBC_PASSWD_FILE
+#  include <pwd.h>
+#endif
+#ifdef CONFIG_LIBC_GROUP_FILE
+#  include <grp.h>
+#endif
 
 #include "nsh.h"
 
@@ -340,6 +348,44 @@ static inline int ls_specialdir(FAR const char *dir)
 
   return (strcmp(dir, ".")  == 0 || strcmp(dir, "..") == 0);
 }
+
+#ifdef CONFIG_SCHED_USER_IDENTITY
+/****************************************************************************
+ * Name: nsh_ls_printowner
+ ****************************************************************************/
+
+static void nsh_ls_printowner(FAR struct nsh_vtbl_s *vtbl, uid_t uid,
+                              gid_t gid)
+{
+#ifdef CONFIG_LIBC_PASSWD_FILE
+  FAR struct passwd *pwd;
+
+  pwd = getpwuid(uid);
+  if (pwd != NULL && pwd->pw_name != NULL)
+    {
+      nsh_output(vtbl, "%8s", pwd->pw_name);
+    }
+  else
+#endif
+    {
+      nsh_output(vtbl, "%8d", (int)uid);
+    }
+
+#ifdef CONFIG_LIBC_GROUP_FILE
+  FAR struct group *grp;
+
+  grp = getgrgid(gid);
+  if (grp != NULL && grp->gr_name != NULL)
+    {
+      nsh_output(vtbl, "%8s", grp->gr_name);
+    }
+  else
+#endif
+    {
+      nsh_output(vtbl, "%8d", (int)gid);
+    }
+}
+#endif /* CONFIG_SCHED_USER_IDENTITY */
 #endif
 
 /****************************************************************************
@@ -511,8 +557,7 @@ static int ls_handler(FAR struct nsh_vtbl_s *vtbl, FAR const char *dirpath,
 #ifdef CONFIG_SCHED_USER_IDENTITY
       if ((lsflags & LSFLAGS_UID_GID) != 0)
         {
-          nsh_output(vtbl, "%8d", buf.st_uid);
-          nsh_output(vtbl, "%8d", buf.st_gid);
+          nsh_ls_printowner(vtbl, buf.st_uid, buf.st_gid);
         }
 #endif
 
@@ -554,6 +599,19 @@ static int ls_handler(FAR struct nsh_vtbl_s *vtbl, FAR const char *dirpath,
             {
               nsh_output(vtbl, "%12" PRIdOFF, buf.st_size);
             }
+        }
+
+      /* Display modification time in long format */
+
+      if ((lsflags & LSFLAGS_LONG) != 0 && buf.st_mtime != 0)
+        {
+          struct tm tm;
+          char timebuf[20];
+          time_t mtime = (time_t)buf.st_mtime;
+
+          gmtime_r(&mtime, &tm);
+          strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M", &tm);
+          nsh_output(vtbl, " %s", timebuf);
         }
     }
 
@@ -695,13 +753,14 @@ static int fdinfo_callback(FAR struct nsh_vtbl_s *vtbl,
   if (ret < 0)
     {
       nsh_error(vtbl, g_fmtcmdfailed, "fdinfo", "asprintf", NSH_ERRNO);
+      return ret;
     }
 
   nsh_output(vtbl, "\npid:%s", entryp->d_name);
   ret = nsh_catfile(vtbl, "fdinfo", filepath);
   if (ret < 0)
     {
-      nsh_error(vtbl, g_fmtcmdfailed, "fdinfo", "nsh_catfaile", NSH_ERRNO);
+      nsh_error(vtbl, g_fmtcmdfailed, "fdinfo", "nsh_catfile", NSH_ERRNO);
     }
 
   free(filepath);
@@ -813,6 +872,10 @@ int cmd_cat(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
   if (argc == 1)
     {
       char *buf = malloc(BUFSIZ);
+      if (buf == NULL)
+        {
+          return -ENOMEM;
+        }
 
       /* Dump from input */
 
@@ -837,6 +900,129 @@ int cmd_cat(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
         }
 
       free(buf);
+    }
+
+  return ret;
+}
+#endif
+
+/****************************************************************************
+ * Name: cmd_chmod
+ *
+ * Description:
+ *   chmod <octal-mode> <path>
+ *
+ *   Only numeric (octal) modes are supported.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_FS_PERMISSION) && !defined(CONFIG_NSH_DISABLE_CHMOD)
+int cmd_chmod(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
+{
+  FAR char *fullpath;
+  FAR char *endptr;
+  long      mode;
+  int       ret = ERROR;
+
+  UNUSED(argc);
+
+  mode = strtol(argv[1], &endptr, 8);
+  if (endptr == argv[1] || *endptr != '\0' || mode < 0 || mode > 0777)
+    {
+      nsh_error(vtbl, g_fmtarginvalid, argv[0]);
+      return ERROR;
+    }
+
+  fullpath = nsh_getfullpath(vtbl, argv[2]);
+  if (fullpath != NULL)
+    {
+      ret = chmod(fullpath, (mode_t)mode);
+      if (ret < 0)
+        {
+          nsh_error(vtbl, g_fmtcmdfailed, argv[0], "chmod", NSH_ERRNO);
+        }
+
+      nsh_freefullpath(fullpath);
+    }
+
+  return ret;
+}
+#endif
+
+/****************************************************************************
+ * Name: cmd_chown
+ *
+ * Description:
+ *   chown <uid>[:<gid>] <path>
+ *   chown [<uid>]:<gid> <path>
+ *
+ *   Only numeric uid/gid forms are supported.  Empty uid or gid fields
+ *   leave that side unchanged.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_FS_PERMISSION) && !defined(CONFIG_NSH_DISABLE_CHOWN)
+int cmd_chown(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
+{
+  FAR const char *spec = argv[1];
+  FAR char       *endptr;
+  FAR char       *fullpath;
+  long            value;
+  uid_t           uid = (uid_t)-1;
+  gid_t           gid = (gid_t)-1;
+  int             ret = ERROR;
+
+  UNUSED(argc);
+
+  value = strtol(spec, &endptr, 10);
+  if (endptr != spec)
+    {
+      if (value < 0)
+        {
+          nsh_error(vtbl, g_fmtarginvalid, argv[0]);
+          return ERROR;
+        }
+
+      uid = (uid_t)value;
+    }
+
+  if (*endptr == ':')
+    {
+      FAR const char *gidstr = endptr + 1;
+      if (*gidstr != '\0')
+        {
+          value = strtol(gidstr, &endptr, 10);
+          if (*endptr != '\0' || value < 0)
+            {
+              nsh_error(vtbl, g_fmtarginvalid, argv[0]);
+              return ERROR;
+            }
+
+          gid = (gid_t)value;
+        }
+    }
+  else if (*endptr != '\0')
+    {
+      nsh_error(vtbl, g_fmtarginvalid, argv[0]);
+      return ERROR;
+    }
+
+  if (uid == (uid_t)-1 && gid == (gid_t)-1)
+    {
+      nsh_error(vtbl, g_fmtarginvalid, argv[0]);
+      return ERROR;
+    }
+
+  fullpath = nsh_getfullpath(vtbl, argv[2]);
+  if (fullpath != NULL)
+    {
+      ret = lchown(fullpath, uid, gid);
+      if (ret < 0)
+        {
+          nsh_error(vtbl, g_fmtcmdfailed, argv[0], "chown", NSH_ERRNO);
+        }
+
+      nsh_freefullpath(fullpath);
     }
 
   return ret;
@@ -1308,7 +1494,7 @@ int cmd_lomtd(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
   int sectsize = -1;
   off_t offset = 0;
   bool badarg = false;
-#  ifdef CONFIG_MTD_CONFIG
+#  ifndef CONFIG_MTD_CONFIG_NONE
   int configdata = 0;
 #  endif
   int ret = ERROR;
@@ -1324,7 +1510,7 @@ int cmd_lomtd(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
    * NOTE that the -o and -r options are accepted with the -d option, but
    * will be ignored.
    */
-#  ifdef CONFIG_MTD_CONFIG
+#  ifndef CONFIG_MTD_CONFIG_NONE
   while ((option = getopt(argc, argv, "d:o:e:b:c:")) != ERROR)
 #  else
   while ((option = getopt(argc, argv, "d:o:e:b:")) != ERROR)
@@ -1349,7 +1535,7 @@ int cmd_lomtd(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
           sectsize = atoi(optarg);
           break;
 
-#  ifdef CONFIG_MTD_CONFIG
+#  ifndef CONFIG_MTD_CONFIG_NONE
         case 'c':
           configdata = atoi(optarg);
           break;
@@ -1435,7 +1621,7 @@ int cmd_lomtd(FAR struct nsh_vtbl_s *vtbl, int argc, FAR char **argv)
       setup.sectsize   = sectsize;   /* The sector size to use with the block device */
       setup.erasesize  = erasesize;  /* The sector size to use with the block device */
       setup.offset     = offset;     /* An offset that may be applied to the device */
-#  ifdef CONFIG_MTD_CONFIG
+#  ifndef CONFIG_MTD_CONFIG_NONE
       setup.configdata = configdata; /* Is a loop mtdconfig device */
 #  endif
 

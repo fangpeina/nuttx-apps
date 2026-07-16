@@ -109,6 +109,12 @@ int setvbuf_test(void);
 int dev_null_test(void);
 #endif
 
+/* multiuser.c **************************************************************/
+
+#if defined(CONFIG_TESTING_OSTEST_MULTIUSER) && defined(CONFIG_SCHED_USER_IDENTITY)
+int multiuser_test(void);
+#endif
+
 /* fpu.c ********************************************************************/
 
 void fpu_test(void);
@@ -215,6 +221,12 @@ void suspend_test(void);
 
 void wdog_test(void);
 
+/* hrtimer.c ****************************************************************/
+
+#ifdef CONFIG_HRTIMER
+void hrtimer_test(void);
+#endif
+
 /* posixtimers.c ************************************************************/
 
 void timer_test(void);
@@ -286,6 +298,16 @@ void setjmp_test(void);
 void smp_call_test(void);
 #endif
 
+/* spinlock.c ***************************************************************/
+
+void spinlock_test(void);
+
+/* perf_gettime.c ***********************************************************/
+
+#ifdef CONFIG_ARCH_HAVE_PERF_EVENTS
+void perf_gettime_test(void);
+#endif
+
 /* APIs exported (conditionally) by the OS specifically for testing of
  * priority inheritance
  */
@@ -302,10 +324,6 @@ int sem_nfreeholders(void);
 
 #if defined(CONFIG_SCHED_EVENTS) && defined(CONFIG_BUILD_FLAT)
 void nxevent_test(void);
-#endif
-
-#if defined(CONFIG_HRTIMER) && defined(CONFIG_BUILD_FLAT)
-void hrtimer_test(void);
 #endif
 
 #endif /* __APPS_TESTING_OSTEST_OSTEST_H */
